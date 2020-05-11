@@ -40,7 +40,53 @@
         (.catch (fn [error]
                   (js/console.error "Error adding document: " error))))))
 
+(defn register-peer-connection-listeners [peer-connection]
+  (doto peer-connection
+    (.addEventListener "icegatheringstatechange"
+                       (fn [] (js/console.log "ICE gathering state changed: " (.-iceGatheringState peer-connection))))
+    (.addEventListener "connectionstatechange"
+                       (fn [] (js/console.log "Connection state change: " (.-connectionState peer-connection))))
+    (.addEventListener "signalingstatechange"
+                       (fn [] (js/console.log "Signaling state changed: " (.-signalingState peer-connection))))
+    (.addEventListener "iceconnectionstatechange"
+                       (fn [] (js/console.log "ICE connection state changed: " (.-iceConnectionState peer-connection))))))
+
+(defn collect-ice-candidates [room-ref peer-connection]
+  (let [caller-candidates (.collection room-ref "callerCandidates")]
+    (.addEventListener peer-connection "icecandidate"
+                       (fn [event]
+                         (let [candidate (.-candidate event)]
+                           (if candidate
+                             (do
+                               (js/console.log "Got candidate: " candidate)
+                               (.add caller-candidates (.toJSON candidate)))
+                             (js/console.log "Got final candidate!"))))))
+  (-> room-ref
+      (.collection "calleeCandidates")
+      (.onSnapshot (fn [snapshot]
+                     (doseq [change (.docChanges snapshot)]
+                       (when (= (.-type change) "added")
+                         (.addIceCandidate (js/RTCIceCandidate. (.data (.-doc change))))))))))
+
+(defn create-room [db peer-connection]
+  (go
+    (let [room-ref (-> db (.collection "rooms") (.doc))
+          offer    (<p! (.createOffer peer-connection))]
+      (collect-ice-candidates room-ref peer-connection)
+      (<p! (.setLocalDescription peer-connection offer))
+      (js/console.log "Created offer:" offer)
+      (<p! (.set room-ref (clj->js {:offer {:type (.-type offer)
+                                            :sdp  (.-sdp offer)}})))
+      (js/console.log "New room created with SDP offer. Room ID: " (.-id room-ref)))))
+
 (defn ^:export init []
   (js/console.log "init")
   (init-db)
-  (write-to-db))
+  (write-to-db)
+
+  (let [db              (firebase/firestore)
+        peer-connection (js/RTCPeerConnection. ice-candidate-config)]
+    (register-peer-connection-listeners peer-connection)
+
+    (create-room db peer-connection)
+    ))
