@@ -1,0 +1,9 @@
+{:deps   true
+ :builds {:chat {:target     :browser
+                 :asset-path "/js"
+                 :output-dir "resources/public/js"
+                 :devtools
+                 {:http-root "resources/public"
+                  :http-port 3000
+                  :preloads  [devtools.preload]}
+                 :modules    {:main {:entries [cljs-webrtc-chat-example.main]}}}}}
