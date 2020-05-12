@@ -62,6 +62,7 @@
                  (let [data   (.-data snapshot)
                        answer (.-answer data)]
                    (when (and (not (.-currentRemoteDescription peer-connection)) data answer)
+                     (js/console.log "Set remote description: " answer)
                      (.setRemoteDescription peer-connection (js/RTCSessionDescription. answer)))))))
 
 (defn create-offer [db peer-connection]
@@ -81,6 +82,28 @@
         (collect-ice-candidates peer-connection)
         (listen-for-answer peer-connection)))))
 
+(defn create-answer [room-ref room-snapshot peer-connection]
+  (go
+    (let [offer (.-offer (.data room-snapshot))]
+      (js/console.log "Got an offer: " offer)
+      (<p! (.setRemoteDescription peer-connection offer))
+      (let [answer (<p! (.createAnswer peer-connection))]
+        (js/console.log "Created answer: " answer)
+        (<p! (.setLocalDescription peer-connection answer))
+        (<p! (.update room-ref (clj->js {:answer {:type (.-type answer)
+                                                  :sdp  (.-sdp answer)}})))))))
+
+(defn join-room [db peer-connection room-id]
+  (go
+    (let [room-ref      (.doc (.collection db "rooms") (str room-id))
+          room-snapshot (<p! (.get room-ref))]
+      (js/console.log "Got a room:" (.-exists room-snapshot))
+
+      (when (.-exists room-snapshot)
+        (doto room-ref
+          (create-answer room-snapshot peer-connection)
+          (collect-ice-candidates peer-connection))))))
+
 (defn ^:export init []
   (js/console.log "init")
   (init-db)
@@ -96,4 +119,16 @@
                                       alert    (.querySelector js/document "#create-room-alert")]
                                   (set! (.-textContent alert) (str "Room created with id: " (.-id room-ref)))
                                   (set! (.-hidden alert) false)))))
+
+    (-> js/document
+        (.querySelector "#join-room-btn")
+        (.addEventListener "click"
+                           #(go (let [room-id (.-value (.querySelector js/document "#join-room-input"))
+                                      alert   (.querySelector js/document "#join-room-alert")]
+                                  (<! (join-room db peer-connection room-id))
+                                  (set! (.-textContent alert) (str "Room joined with id: " room-id))
+                                  (set! (.-hidden alert) false)))
+                           #js {:once true}))
+
+
     ))

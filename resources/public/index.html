@@ -21,14 +21,16 @@
             <input id="user-name-input" type="text" class="form-control" placeholder="Your Username">
           </div>
 
-          <div class="input-group mb-3">
+          <button id="create-room-btn" type="button" class="btn btn-primary">Create Room</button>
+          <div id="create-room-alert" class="alert alert-success" role="alert" hidden=true></div>
+                    <div class="input-group mb-3">
             <div class="input-group-prepend">
               <button id="join-room-btn" class="btn btn-primary" type="button">Join Room</button>
             </div>
-            <input type="text" class="form-control" placeholder="Room ID">
+            <input id="join-room-input" type="text" class="form-control" placeholder="Room ID">
           </div>
-          <button id="create-room-btn" type="button" class="btn btn-primary">Create Room</button>
-          <div id="create-room-alert" class="alert alert-success" role="alert" hidden=true></div>
+          <div id="join-room-alert" class="alert alert-success" role="alert" hidden=true></div>
+
         </div>
 
         <div class="col-8">
