@@ -1,5 +1,6 @@
 (ns cljs-webrtc-chat-example.main
-  (:require [cljs.core.async :refer [go]]
+  (:require [cljs.tools.reader.edn :as edn]
+            [cljs.core.async :refer [go]]
             [cljs.core.async.interop :refer-macros [<p!]]
             ["firebase/app" :as firebase]
             ["firebase/analytics"]
@@ -14,9 +15,9 @@
                           :appId             "1:1003664825440:web:64510b2b76a207f0343705"
                           :measurementId     "G-NLE2WT7NEC"})
 
-(def ice-candidate-config #js {:iceServers           #js [#js {:urls #js ["stun:stun1.l.google.com:19302"
-                                                                          "stun:stun2.l.google.com:19302"]}]
-                               :iceCandidatePoolSize 10})
+(def ice-candidate-config (clj->js {:iceServers            [{:urls ["stun:stun1.l.google.com:19302"
+                                                                    "stun:stun2.l.google.com:19302"]}]
+                                    :iceCandidatePoolSize 10}))
 
 (defn ^:dev/after-load start []
   (js/console.log "start"))
@@ -39,31 +40,36 @@
     (.addEventListener "iceconnectionstatechange"
                        (fn [] (js/console.log "ICE connection state changed: " (.-iceConnectionState peer-connection))))))
 
-(defn collect-ice-candidates [room-ref peer-connection]
-  (let [caller-candidates (.collection room-ref "callerCandidates")]
+(defn collect-ice-candidates [room-ref peer-connection local-name remote-name]
+  (let [candidates (.collection room-ref local-name)]
     (.addEventListener peer-connection "icecandidate"
                        (fn [event]
-                         (let [candidate (.-candidate event)]
-                           (if candidate
-                             (do
-                               (js/console.log "Got candidate: " candidate)
-                               (.add caller-candidates (.toJSON candidate)))
-                             (js/console.log "Got final candidate!"))))))
+                         (js/console.log "icecandidate" event)
+                         (if-let [candidate (.-candidate event)]
+                           (do
+                             (js/console.log "Got candidate: " candidate)
+                             (.add candidates (.toJSON candidate)))
+                           (js/console.log "Got final candidate!")))))
   (-> room-ref
-      (.collection "calleeCandidates")
+      (.collection remote-name)
       (.onSnapshot (fn [snapshot]
                      (doseq [change (.docChanges snapshot)]
-                       (when (= (.-type change) "added")
-                         (.addIceCandidate (js/RTCIceCandidate. (.data (.-doc change))))))))))
+                       (go (when (= (.-type change) "added")
+                             (let [data (.data (.-doc change))]
+                               (js/console.log (str "Got new remote ICE candidate: " (js/JSON.stringify data)))
+                               (<p! (.addIceCandidate peer-connection
+                                                      (js/RTCIceCandidate. (.data (.-doc change)))))))))))))
 
 (defn listen-for-answer [room-ref peer-connection]
   (.onSnapshot room-ref
                (fn [snapshot]
-                 (let [data   (.-data snapshot)
-                       answer (.-answer data)]
-                   (when (and (not (.-currentRemoteDescription peer-connection)) data answer)
-                     (js/console.log "Set remote description: " answer)
-                     (.setRemoteDescription peer-connection (js/RTCSessionDescription. answer)))))))
+                 (js/console.log "New Snapshot" snapshot)
+                 (go
+                   (let [data   (.data snapshot)
+                         answer (.-answer data)]
+                     (when (and (not (.-currentRemoteDescription peer-connection)) data answer)
+                       (js/console.log "Set remote description: " answer)
+                       (<p! (.setRemoteDescription peer-connection (js/RTCSessionDescription. answer)))))))))
 
 (defn create-offer [db peer-connection]
   (go
@@ -73,13 +79,14 @@
       (<p! (.setLocalDescription peer-connection offer))
       {:offer offer :room-ref room-ref})))
 
-(defn create-room [db peer-connection]
+(defn create-room [db peer-connection data-channel]
+  (reset! data-channel (.createDataChannel peer-connection "senderChannel"))
   (go
     (let [{:keys [offer room-ref]} (<! (create-offer db peer-connection))]
       (js/console.log "Offer created: " offer)
       (js/console.log "New room created with SDP offer. Room ID: " (.-id room-ref))
       (doto room-ref
-        (collect-ice-candidates peer-connection)
+        (collect-ice-candidates peer-connection "callerCandidates" "calleeCandidates")
         (listen-for-answer peer-connection)))))
 
 (defn create-answer [room-ref room-snapshot peer-connection]
@@ -93,29 +100,40 @@
         (<p! (.update room-ref (clj->js {:answer {:type (.-type answer)
                                                   :sdp  (.-sdp answer)}})))))))
 
-(defn join-room [db peer-connection room-id]
+(defn join-room [db peer-connection room-id data-channel]
   (go
     (let [room-ref      (.doc (.collection db "rooms") (str room-id))
           room-snapshot (<p! (.get room-ref))]
       (js/console.log "Got a room:" (.-exists room-snapshot))
 
+      (.addEventListener peer-connection "datachannel"
+                         (fn [event]
+                           (js/console.log "Got receiving datachannel:" (.-channel event))
+                           (reset! data-channel (.-channel event))))
+
       (when (.-exists room-snapshot)
         (doto room-ref
           (create-answer room-snapshot peer-connection)
-          (collect-ice-candidates peer-connection))))))
+          (collect-ice-candidates peer-connection "calleeCandidates" "callerCandidates"))))))
+
+(defn write-message [{:keys [author message]}]
+  (let [chat-text-area (.querySelector js/document "#chat-text-area")]
+    (set! (.-value chat-text-area)
+          (str (.-value chat-text-area) "\n" author ": " message))))
 
 (defn ^:export init []
   (js/console.log "init")
   (init-db)
 
   (let [db              (firebase/firestore)
-        peer-connection (js/RTCPeerConnection. ice-candidate-config)]
+        peer-connection (js/RTCPeerConnection. ice-candidate-config)
+        data-channel    (atom nil)]
     (register-peer-connection-listeners peer-connection)
 
     (-> js/document
         (.querySelector "#create-room-btn")
         (.addEventListener "click"
-                           #(go (let [room-ref (<! (create-room db peer-connection))
+                           #(go (let [room-ref (<! (create-room db peer-connection data-channel))
                                       alert    (.querySelector js/document "#create-room-alert")]
                                   (set! (.-textContent alert) (str "Room created with id: " (.-id room-ref)))
                                   (set! (.-hidden alert) false)))))
@@ -125,10 +143,26 @@
         (.addEventListener "click"
                            #(go (let [room-id (.-value (.querySelector js/document "#join-room-input"))
                                       alert   (.querySelector js/document "#join-room-alert")]
-                                  (<! (join-room db peer-connection room-id))
+                                  (<! (join-room db peer-connection room-id data-channel))
                                   (set! (.-textContent alert) (str "Room joined with id: " room-id))
                                   (set! (.-hidden alert) false)))
                            #js {:once true}))
 
+    (-> js/document
+        (.querySelector "#send-btn")
+        (.addEventListener "click"
+                           (fn [_]
+                             (when @data-channel
+                               (let [message {:author  (.-value (.querySelector js/document "#user-name-input"))
+                                              :message (.-value (.querySelector js/document "#message-input"))}]
+                                 (write-message message)
+                                 (.send @data-channel (str message)))))))
 
-    ))
+    (add-watch data-channel :receiver
+               (fn [_ _ _ new-channel]
+                 (when new-channel
+                   (.addEventListener new-channel "message"
+                                      (fn [event]
+                                        (let [chat-text-area (.querySelector js/document "#chat-text-area")]
+                                          (set! (.-value chat-text-area)
+                                                (write-message (edn/read-string (.-data event))))))))))))
