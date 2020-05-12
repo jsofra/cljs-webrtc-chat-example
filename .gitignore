@@ -1,18 +1,12 @@
 node_modules/
 resources/public/js
 
-/target
-/checkouts
-/src/gen
-
 pom.xml
 pom.xml.asc
-*.iml
-*.jar
-*.log
 .shadow-cljs
-.idea
-.lein-*
 .nrepl-*
+.cljs_node_repl
+.cpcache
 .DS_Store
+package-lock.json
 
