@@ -1,10 +1,53 @@
 <!doctype html>
-<html>
-  <head><title>WebRTC Chat</title></head>
-  <link rel="stylesheet" href="/css/chat.css">
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+    <title>WebRTC Chat</title>
+  </head>
+
   <body>
-    <h1>WebRTC Chat</h1>
-    <div id="app"></div>
+    <div class="container" id="chat">
+      <h1>WebRTC Chat</h1>
+
+      <div class="row">
+        <div class="col-4">
+          <div class="input-group mb-3">
+            <div class="input-group-prepend">
+              <span class="input-group-text" id="basic-addon1">@</span>
+            </div>
+            <input id="user-name-input" type="text" class="form-control" placeholder="Username" aria-label="Username" aria-describedby="basic-addon1">
+          </div>
+
+          <div class="input-group mb-3">
+            <div class="input-group-prepend">
+              <button id="join-room-btn" class="btn btn-primary" type="button">Join Room</button>
+            </div>
+            <input type="text" class="form-control" placeholder="Room ID">
+          </div>
+          <button id="create-room-btn" type="button" class="btn btn-primary">Create Room</button>
+          <div id="create-room-alert" class="alert alert-success" role="alert" hidden=true></div>
+        </div>
+
+        <div class="col-8">
+          <div class="input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text">Chat Window</span>
+            </div>
+            <textarea id="chat-text-area" class="form-control" aria-label="With textarea" rows="15" style="height:100%;"></textarea>
+          </div>
+          <div class="input-group mb-3">
+            <input type="text" class="form-control" placeholder="message" aria-describedby="button-addon2">
+            <div class="input-group-append">
+              <button id="send-btn" class="btn btn-outline-secondary" type="button">send!</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
 
     <script src="/js/main.js"></script>
     <script>cljs_webrtc_chat_example.main.init();</script>
