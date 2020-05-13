@@ -66,8 +66,8 @@
                  (js/console.log "New Snapshot" snapshot)
                  (go
                    (let [data   (.data snapshot)
-                         answer (.-answer data)]
-                     (when (and (not (.-currentRemoteDescription peer-connection)) data answer)
+                         answer (goog.object/get data "answer")]
+                     (when (and (not (goog.object/get peer-connection "currentRemoteDescription")) data answer)
                        (js/console.log "Set remote description: " answer)
                        (<p! (.setRemoteDescription peer-connection (js/RTCSessionDescription. answer)))))))))
 
@@ -91,7 +91,8 @@
 
 (defn create-answer [room-ref room-snapshot peer-connection]
   (go
-    (let [offer (.-offer (.data room-snapshot))]
+    (let [snapshot-data (.data room-snapshot)
+          offer         (goog.object/get snapshot-data "offer")]
       (js/console.log "Got an offer: " offer)
       (<p! (.setRemoteDescription peer-connection offer))
       (let [answer (<p! (.createAnswer peer-connection))]
