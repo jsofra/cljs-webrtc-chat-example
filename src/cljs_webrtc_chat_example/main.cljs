@@ -122,6 +122,16 @@
     (set! (.-value chat-text-area)
           (str (.-value chat-text-area) "\n" author ": " message))))
 
+(defn add-room-options [rooms]
+  (let [room-select (.querySelector js/document "#join-room-select")]
+    (doseq [room rooms]
+      (let [room-id (goog.object/get room "id")]
+        (.add room-select
+              (doto (.createElement js/document "option")
+                (goog.object/set "text" room-id)
+                (goog.object/set "value" room-id)))))))
+
+
 (defn ^:export init []
   (js/console.log "init")
   (init-db)
@@ -131,23 +141,30 @@
         data-channel    (atom nil)]
     (register-peer-connection-listeners peer-connection)
 
-    (-> js/document
-        (.querySelector "#create-room-btn")
-        (.addEventListener "click"
-                           #(go (let [room-ref (<! (create-room db peer-connection data-channel))
-                                      alert    (.querySelector js/document "#create-room-alert")]
-                                  (set! (.-textContent alert) (str "Room created with id: " (.-id room-ref)))
-                                  (set! (.-hidden alert) false)))))
+    (let [create-btn (.querySelector js/document "#create-room-btn")]
+      (.addEventListener create-btn "click"
+                         #(go (let [room-ref (<! (create-room db peer-connection data-channel))
+                                    alert    (.querySelector js/document "#create-room-alert")]
+                                (set! (.-textContent alert) (str "Room created with id: " (.-id room-ref)))
+                                (set! (.-hidden alert) false)
+                                (set! (.-disabled create-btn) true)))))
 
     (-> js/document
         (.querySelector "#join-room-btn")
         (.addEventListener "click"
-                           #(go (let [room-id (.-value (.querySelector js/document "#join-room-input"))
+                           #(go (let [room-id (.-value (.querySelector js/document "#join-room-select"))
                                       alert   (.querySelector js/document "#join-room-alert")]
                                   (<! (join-room db peer-connection room-id data-channel))
                                   (set! (.-textContent alert) (str "Room joined with id: " room-id))
                                   (set! (.-hidden alert) false)))
                            #js {:once true}))
+
+    (let [rooms-ref (.collection db "rooms")]
+      (go
+        (add-room-options (.-docs (<p! (.get rooms-ref)))))
+      (.onSnapshot rooms-ref
+                   (fn [rooms-snapshot]
+                     (add-room-options (.-docs rooms-snapshot)))))
 
     (-> js/document
         (.querySelector "#send-btn")
