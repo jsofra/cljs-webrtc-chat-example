@@ -126,6 +126,7 @@
   (let [room-select (.querySelector js/document "#join-room-select")]
     (doseq [room rooms]
       (let [room-id (goog.object/get room "id")]
+        (set! (.-innerHTML room-select) "")
         (.add room-select
               (doto (.createElement js/document "option")
                 (goog.object/set "text" room-id)
