@@ -175,6 +175,13 @@
                 (goog.object/set "text" room-id)
                 (goog.object/set "value" room-id)))))))
 
+(defn update-room-options [db]
+  (let [rooms-ref (.collection db "rooms")]
+    (go
+      (add-room-options (.-docs (<p! (.get rooms-ref)))))
+    (.onSnapshot rooms-ref
+                 (fn [rooms-snapshot]
+                   (add-room-options (.-docs rooms-snapshot))))))
 
 (defn ^:export init []
   (js/console.log "init")
@@ -203,12 +210,7 @@
                                   (set! (.-hidden alert) false)))
                            #js {:once true}))
 
-    (let [rooms-ref (.collection db "rooms")]
-      (go
-        (add-room-options (.-docs (<p! (.get rooms-ref)))))
-      (.onSnapshot rooms-ref
-                   (fn [rooms-snapshot]
-                     (add-room-options (.-docs rooms-snapshot)))))
+    (update-room-options db)
 
     (-> js/document
         (.querySelector "#send-btn")
