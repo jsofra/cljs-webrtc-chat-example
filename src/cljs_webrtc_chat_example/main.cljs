@@ -40,7 +40,12 @@
     (.addEventListener "iceconnectionstatechange"
                        (fn [] (js/console.log "ICE connection state changed: " (.-iceConnectionState peer-connection))))))
 
-(defn collect-ice-candidates [room-ref peer-connection local-name remote-name]
+(defn collect-ice-candidates
+  "
+  Listen for icecandidate events and save the local candidates in the database.
+  Listen for changes to remote candidates in the database and add them to the local RTCPeerConnection.
+  "
+  [room-ref peer-connection local-name remote-name]
   (let [candidates (.collection room-ref local-name)]
     (.addEventListener peer-connection "icecandidate"
                        (fn [event]
@@ -60,7 +65,11 @@
                                (<p! (.addIceCandidate peer-connection
                                                       (js/RTCIceCandidate. (.data (.-doc change)))))))))))))
 
-(defn listen-for-answer [room-ref peer-connection]
+(defn listen-for-answer
+  "
+  Listen to the database for an SPD answer from a remote peer and save the session description in the RTCPeerConnection.
+  "
+  [room-ref peer-connection]
   (.onSnapshot room-ref
                (fn [snapshot]
                  (js/console.log "New Snapshot" snapshot)
@@ -71,7 +80,11 @@
                        (js/console.log "Set remote description: " answer)
                        (<p! (.setRemoteDescription peer-connection (js/RTCSessionDescription. answer)))))))))
 
-(defn create-offer [db peer-connection]
+(defn create-offer
+  "
+  Create an SPD offer for the local peer and save it to the database for a receiving peer to pick up.
+  "
+  [db peer-connection]
   (go
     (let [offer    (<p! (.createOffer peer-connection))
           room-ref (<p! (.add (.collection db "rooms") (clj->js {:offer {:type (.-type offer)
@@ -79,7 +92,15 @@
       (<p! (.setLocalDescription peer-connection offer))
       {:offer offer :room-ref room-ref})))
 
-(defn create-room [db peer-connection data-channel]
+(defn create-room
+  "
+  Create a new room by:
+   * creating the sender DataChannel
+   * creating a local offer
+   * collecting ice candidates
+   * and finally wait for an answer from a remote peer
+  "
+  [db peer-connection data-channel]
   (reset! data-channel (.createDataChannel peer-connection "senderChannel"))
   (go
     (let [{:keys [offer room-ref]} (<! (create-offer db peer-connection))]
@@ -89,7 +110,12 @@
         (collect-ice-candidates peer-connection "callerCandidates" "calleeCandidates")
         (listen-for-answer peer-connection)))))
 
-(defn create-answer [room-ref room-snapshot peer-connection]
+(defn create-answer
+  "
+  Get the senders offer and create an answer.
+  Save the answer the database for the sender to pick up.
+  "
+  [room-ref room-snapshot peer-connection]
   (go
     (let [snapshot-data (.data room-snapshot)
           offer         (goog.object/get snapshot-data "offer")]
@@ -101,7 +127,15 @@
         (<p! (.update room-ref (clj->js {:answer {:type (.-type answer)
                                                   :sdp  (.-sdp answer)}})))))))
 
-(defn join-room [db peer-connection room-id data-channel]
+(defn join-room
+  "
+  Join a room by:
+   * looking up a room ID in the database.
+   * creating an answer.
+   * collecting ice candidates and save them in the database.
+   * waits for a datachannel event to establish its DataChannel to communicate with.
+  "
+  [db peer-connection room-id data-channel]
   (go
     (let [room-ref      (.doc (.collection db "rooms") (str room-id))
           room-snapshot (<p! (.get room-ref))]
@@ -117,12 +151,21 @@
           (create-answer room-snapshot peer-connection)
           (collect-ice-candidates peer-connection "calleeCandidates" "callerCandidates"))))))
 
-(defn write-message [{:keys [author message]}]
+(defn write-message
+  "
+  Write a message into the chat text area.
+  "
+  [{:keys [author message]}]
   (let [chat-text-area (.querySelector js/document "#chat-text-area")]
     (set! (.-value chat-text-area)
           (str (.-value chat-text-area) "\n" author ": " message))))
 
-(defn add-room-options [rooms]
+(defn add-room-options
+  "
+  Adds the given rooms as options to the room selector list.
+  Clears the list first.
+  "
+  [rooms]
   (let [room-select (.querySelector js/document "#join-room-select")]
     (set! (.-innerHTML room-select) "")
     (doseq [room rooms]
