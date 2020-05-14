@@ -6,6 +6,10 @@ The Firebase Firestore is used for signalling between the peers.
 
 The application is hosted on Firebase and deployed using Github actions.
 
+Deployed to: https://fir-rtc-b4da8.web.app
+
+(Presentation on the example app)[https://docs.google.com/presentation/d/e/2PACX-1vQRMewaxSH1UEpCtTlVBtKGdhLwVX95WH0Dz1W8HdQ-Oj65Y2eBn6oM3ZnCQV95Ril4LUbf57Z3brpB/pub?start=false&loop=false&delayms=5000&slide=id.g77f23565b9_1_51]
+
 ## References
 
 * A lot of inspiration for this was taken from the (Firebase + WebRTC Codelab)[https://webrtc.org/getting-started/firebase-rtc-codelab]
